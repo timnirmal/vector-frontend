@@ -118,10 +118,10 @@ export default function SignInPage() {
         <img
           src="/signin.png"
           alt="Workflow Automation"
-          className="absolute bottom-0 -left-36 z-10"
+          className="absolute bottom-0 -left-36 z-10 2xl:w-10/12"
         />
         <div className="absolute top-0 left-[230px] p-8 text-white opacity-80">
-          <h2 className="text-5xl font-bold mb-2 leading-tight text-left tracking-">
+          <h2 className="text-5xl 2xl:text-6xl 2xl:leading-[1.2]  font-bold mb-2 leading-tight text-left tracking-">
             Let AI Agents {<br/>}Manage Your{<br/>} Business{<br/>} Effortlessly
           </h2>
         </div>

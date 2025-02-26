@@ -357,7 +357,7 @@ export default function LeadQualificationWorkflow() {
                 </div>
               )}
               
-              <ScrollArea className="h-[500px]">
+              <ScrollArea className="h-[500px] rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
