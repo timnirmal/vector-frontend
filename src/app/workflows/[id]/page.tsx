@@ -3,6 +3,7 @@
 
 import { use } from 'react';
 import { Navbar } from '@/components/nav/navbar';
+import { usePathname } from 'next/navigation';
 import InsuranceWorkflow from '@/components/workflows/insurance-workflow';
 import InvoiceWorkflow from '@/components/workflows/invoice-workflow';
 import JobFollowupWorkflow from '@/components/workflows/job-followup-workflow';
@@ -13,10 +14,9 @@ interface WorkflowParams {
   id: string;
 }
 
-export default function WorkflowPage({ params }: { params: WorkflowParams | Promise<WorkflowParams> }) {
-  // Use React.use to unwrap the params if it's a Promise
-  const unwrappedParams = params instanceof Promise ? use(params) : params;
-  const workflowId = unwrappedParams.id;
+export default function WorkflowPage() {
+  const pathname = usePathname(); // ✅ Get the full pathname
+  const workflowId = pathname.split('/').pop(); // ✅ Extract the last part as `id`
 
   const renderWorkflow = () => {
     switch (workflowId) {
