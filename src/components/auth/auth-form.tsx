@@ -27,8 +27,8 @@ export const AuthForm = () => {
     setError('');
 
     try {
+      await login(email, password);
       router.push('/workflows');
-      // await login(email, password);
     } catch (err) {
       setError('Invalid credentials. Try demo@example.com / demo123');
     } finally {
