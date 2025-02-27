@@ -14,6 +14,7 @@ import { ImagePlus, Send, Loader2, ChevronDown, ArrowLeft, X } from "lucide-reac
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   type: "system" | "user" | "result" | "image" | "thinking";
@@ -181,7 +182,9 @@ export default function InsuranceWorkflow() {
                 // Add result message
                 responseMessages.push({
                   type: "result",
-                  content: `Analysis complete! Here are the accident details (Report ${index + 1}):`,
+                content: `Analysis complete! Here are the accident details (Report ${
+                  index + 1
+                }):`,
                   timestamp: new Date(),
                 });
 
@@ -378,7 +381,7 @@ export default function InsuranceWorkflow() {
                                           : "bg-white border"
                               }`}
                           >
-                            {message.content}
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
                           </div>
                       )}
                     </div>
@@ -498,6 +501,12 @@ export default function InsuranceWorkflow() {
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     className="w-full"
+                // Send on Enter
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSubmit();
+                  }
+                }}
                 />
               </div>
 
