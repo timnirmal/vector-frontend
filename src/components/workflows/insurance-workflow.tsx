@@ -129,7 +129,7 @@ export default function InsuranceWorkflow() {
             console.log("Sending request to insurance API...");
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+            const timeoutId = setTimeout(() => controller.abort(), 300000); // 30s timeout
 
             // Use FormData instead of JSON
             const formData = new FormData();
