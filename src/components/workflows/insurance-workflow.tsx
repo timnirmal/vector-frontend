@@ -170,7 +170,7 @@ export default function InsuranceWorkflow() {
             // Remove thinking message
             setIsThinking(false);
 
-            let responseMessages = [];
+            let responseMessages: { type: string; content: any; timestamp: Date; }[] = [];
 
             // Handling Image-Based Response
             if (data.result && Array.isArray(data.result) && data.result.length > 0) {

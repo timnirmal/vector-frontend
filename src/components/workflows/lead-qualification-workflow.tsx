@@ -1,7 +1,7 @@
 // src/components/workflows/lead-qualification-workflow.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Upload, Download, FileSpreadsheet, ArrowLeft, Check, Filter } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, ArrowLeft, Check, Filter, RefreshCw } from 'lucide-react';
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { motion } from 'framer-motion';
@@ -38,6 +38,13 @@ interface BANT {
   totalScore: number;
 }
 
+interface ResearchData {
+  companySize?: string;
+  industry?: string;
+  technologies?: string[];
+  interactions?: string[];
+}
+
 interface Lead {
   id: string;
   name: string;
@@ -49,7 +56,11 @@ interface Lead {
   score?: number;
   notes?: string;
   bant?: BANT;
+  research?: ResearchData;
 }
+
+// API base URL
+const API_BASE_URL = 'https://api.know360.io/lead_qualification_agent';
 
 export default function LeadQualificationWorkflow() {
   const router = useRouter();
@@ -84,83 +95,188 @@ export default function LeadQualificationWorkflow() {
   ]);
   const [processingLeads, setProcessingLeads] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [progressValue, setProgressValue] = useState(0);
+  const [researchData, setResearchData] = useState<Record<string, any>>({});
+  const [isLoadingResearch, setIsLoadingResearch] = useState(false);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files.length > 0) {
-      toast.success(`File uploaded successfully`);
+  // Fetch all research data on component mount
+  useEffect(() => {
+    fetchAllResearch();
+  }, []);
+
+  const fetchAllResearch = async () => {
+    try {
+      setIsLoadingResearch(true);
+      const response = await fetch(`${API_BASE_URL}/research/`);
       
-      // Simulate adding new leads
-      const newLeads: Lead[] = [
-        {
-          id: '4',
-          name: 'Emily Wilson',
-          company: 'Innovate Inc',
-          email: 'emily@innovate.com',
-          phone: '555-222-3333',
-          source: 'CSV Import',
-          status: 'New'
-        },
-        {
-          id: '5',
-          name: 'David Lee',
-          company: 'Future Tech',
-          email: 'david@futuretech.com',
-          phone: '555-444-5555',
-          source: 'CSV Import',
-          status: 'New'
-        }
-      ];
+      if (!response.ok) {
+        throw new Error(`Failed to fetch research: ${response.status}`);
+      }
       
-      setLeads(prevLeads => [...prevLeads, ...newLeads]);
+      const data = await response.json();
+      setResearchData(data);
+    } catch (error) {
+      console.error('Error fetching research:', error);
+      toast.error('Failed to fetch research data');
+    } finally {
+      setIsLoadingResearch(false);
     }
   };
 
-  const generateBANTAnalysis = (leadId: string): BANT => {
-    // This would normally come from an API call based on the lead data
-    // For demo purposes, we're generating random but plausible values
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      const file = event.target.files[0];
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      setIsUploading(true);
+      
+      try {
+        // Upload the CSV file to the API
+        const response = await fetch(`${API_BASE_URL}/upload-csv/`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to upload: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        toast.success('File uploaded successfully');
+        
+        // Refresh research data after upload
+        await fetchAllResearch();
+        
+        // Create new leads from the uploaded data
+        try {
+          const newLeads: Lead[] = [];
+          
+          // Check if result has the expected structure
+          if (result.companies && typeof result.companies === 'object') {
+            Object.entries(result.companies).forEach(([companyName, data]: [string, any], index) => {
+              if (companyName && typeof data === 'object') {
+                newLeads.push({
+                  id: `uploaded-${Date.now()}-${index}`,
+                  name: data.contact_name || 'Unknown Contact',
+                  company: companyName,
+                  email: data.contact_email || `contact@${companyName.toLowerCase().replace(/\s+/g, '')}.com`,
+                  phone: data.contact_phone || 'N/A',
+                  source: 'CSV Import',
+                  status: 'New'
+                });
+              }
+            });
+          } else if (Array.isArray(result)) {
+            // Handle array response format
+            result.forEach((item, index) => {
+              if (item && item.company) {
+                newLeads.push({
+                  id: `uploaded-${Date.now()}-${index}`,
+                  name: item.contact_name || 'Unknown Contact',
+                  company: item.company,
+                  email: item.email || `contact@${item.company.toLowerCase().replace(/\s+/g, '')}.com`,
+                  phone: item.phone || 'N/A',
+                  source: 'CSV Import',
+                  status: 'New'
+                });
+              }
+            });
+          }
+          
+          if (newLeads.length > 0) {
+            setLeads(prevLeads => [...prevLeads, ...newLeads]);
+            toast.success(`Added ${newLeads.length} new leads`);
+          } else {
+            toast.warning('No valid leads found in the uploaded file');
+          }
+        } catch (parseError) {
+          console.error('Error parsing API response:', parseError);
+          toast.error('Failed to process the uploaded data');
+        }
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        toast.error('Failed to upload file');
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  const fetchCompanyResearch = async (companyName: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/research/${encodeURIComponent(companyName)}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch company research: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error(`Error fetching research for ${companyName}:`, error);
+      return null;
+    }
+  };
+
+  const generateBANTAnalysis = (leadData: any): BANT => {
+    // Extract BANT scores from research data if available
+    let budgetScore = leadData?.budget_score || Math.floor(Math.random() * 10) + 1;
+    let authorityScore = leadData?.authority_score || Math.floor(Math.random() * 10) + 1;
+    let needScore = leadData?.need_score || Math.floor(Math.random() * 10) + 1;
+    let timelineScore = leadData?.timeline_score || Math.floor(Math.random() * 10) + 1;
     
-    // Generate scores between 1-10
-    const budgetScore = Math.floor(Math.random() * 10) + 1;
-    const authorityScore = Math.floor(Math.random() * 10) + 1;
-    const needScore = Math.floor(Math.random() * 10) + 1;
-    const timelineScore = Math.floor(Math.random() * 10) + 1;
+    // Ensure scores are in valid range
+    budgetScore = Math.min(Math.max(budgetScore, 1), 10);
+    authorityScore = Math.min(Math.max(authorityScore, 1), 10);
+    needScore = Math.min(Math.max(needScore, 1), 10);
+    timelineScore = Math.min(Math.max(timelineScore, 1), 10);
     
     const totalScore = (budgetScore + authorityScore + needScore + timelineScore) / 4;
     
     return {
       budget: {
         score: budgetScore,
-        notes: budgetScore > 7 
+        notes: leadData?.budget_notes || (budgetScore > 7 
           ? "Has allocated budget for this quarter" 
-          : "Budget not specifically allocated, but interested"
+          : "Budget not specifically allocated, but interested")
       },
       authority: {
         score: authorityScore,
-        notes: authorityScore > 7 
+        notes: leadData?.authority_notes || (authorityScore > 7 
           ? "Decision maker with purchasing authority" 
-          : "Influencer, needs approval from management"
+          : "Influencer, needs approval from management")
       },
       need: {
         score: needScore,
-        notes: needScore > 7 
+        notes: leadData?.need_notes || (needScore > 7 
           ? "Expressed clear need and pain points" 
-          : "Interested but not urgent need identified"
+          : "Interested but not urgent need identified")
       },
       timeline: {
         score: timelineScore,
-        notes: timelineScore > 7 
+        notes: leadData?.timeline_notes || (timelineScore > 7 
           ? "Looking to implement within 1-3 months" 
-          : "No specific timeline, exploring options"
+          : "No specific timeline, exploring options")
       },
       totalScore: parseFloat(totalScore.toFixed(1))
     };
   };
 
-  const qualifyLeads = () => {
+  const extractResearchData = (companyData: any): ResearchData => {
+    return {
+      companySize: companyData?.company_size || 'Unknown',
+      industry: companyData?.industry || 'Unknown',
+      technologies: companyData?.technologies || [],
+      interactions: companyData?.interactions || []
+    };
+  };
+
+  const qualifyLeads = async () => {
     if (selectedLeads.length === 0) {
       toast.error("Please select leads to qualify");
       return;
@@ -177,53 +293,77 @@ export default function LeadQualificationWorkflow() {
           clearInterval(interval);
           return 100;
         }
-        return prev + 5;
+        return prev + 2;
       });
     }, 100);
 
-    toast.promise(
-      new Promise<void>((resolve) => {
-        setTimeout(() => {
-          setLeads(prevLeads => {
-            return prevLeads.map(lead => {
-              if (selectedLeads.includes(lead.id)) {
-                // Simulate AI qualification logic
-                const score = Math.floor(Math.random() * 100);
-                const newStatus: LeadStatus = score > 60 ? 'Qualified' : 'Unqualified';
-                
-                return {
-                  ...lead,
-                  status: newStatus,
-                  score: score,
-                  notes: score > 60 
-                    ? 'Good fit for our product/service. Recommend follow-up.' 
-                    : 'Not a good fit at this time. Recommend nurturing.',
-                  bant: newStatus === 'Qualified' ? generateBANTAnalysis(lead.id) : undefined
-                };
-              }
-              return lead;
-            });
-          });
+    try {
+      // Process each lead sequentially
+      const updatedLeads = [...leads];
+      
+      for (let i = 0; i < selectedLeads.length; i++) {
+        const leadId = selectedLeads[i];
+        const leadIndex = updatedLeads.findIndex(l => l.id === leadId);
+        
+        if (leadIndex !== -1) {
+          const lead = updatedLeads[leadIndex];
           
-          setSelectedLeads([]);
-          setIsProcessing(false);
-          setProcessingLeads([]);
-          clearInterval(interval);
-          setProgressValue(100);
-          resolve();
-
-          // Reset progress bar after a delay
-          setTimeout(() => {
-            setProgressValue(0);
-          }, 500);
-        }, 2000);
-      }),
-      {
-        loading: 'Qualifying leads...',
-        success: 'Leads qualified successfully',
-        error: 'Failed to qualify leads',
+          // Fetch company research data if available
+          let companyData = researchData[lead.company.toLowerCase()] || null;
+          
+          // If not in cache, try to fetch it
+          if (!companyData) {
+            companyData = await fetchCompanyResearch(lead.company);
+          }
+          
+          // Calculate qualification score based on research data
+          let score = 0;
+          if (companyData) {
+            // Use data to calculate score (implement your scoring logic here)
+            score = companyData.qualification_score || 
+                    (Math.floor(Math.random() * 40) + 60); // Fallback scoring (60-100)
+          } else {
+            // No research data, use random score
+            score = Math.floor(Math.random() * 100);
+          }
+          
+          const newStatus: LeadStatus = score > 60 ? 'Qualified' : 'Unqualified';
+          
+          // Update lead with qualification data
+          updatedLeads[leadIndex] = {
+            ...lead,
+            status: newStatus,
+            score: score,
+            notes: score > 60 
+              ? 'Good fit for our product/service. Recommend follow-up.' 
+              : 'Not a good fit at this time. Recommend nurturing.',
+            bant: newStatus === 'Qualified' ? generateBANTAnalysis(companyData) : undefined,
+            research: companyData ? extractResearchData(companyData) : undefined
+          };
+        }
+        
+        // Update progress for each lead processed
+        setProgressValue((i + 1) / selectedLeads.length * 100);
       }
-    );
+      
+      // Update state with all processed leads
+      setLeads(updatedLeads);
+      toast.success('Leads qualified successfully');
+    } catch (error) {
+      console.error('Error qualifying leads:', error);
+      toast.error('Failed to qualify leads');
+    } finally {
+      setSelectedLeads([]);
+      setIsProcessing(false);
+      setProcessingLeads([]);
+      clearInterval(interval);
+      setProgressValue(100);
+      
+      // Reset progress bar after a delay
+      setTimeout(() => {
+        setProgressValue(0);
+      }, 500);
+    }
   };
 
   const toggleLeadSelection = (id: string) => {
@@ -259,6 +399,25 @@ export default function LeadQualificationWorkflow() {
       return 'cursor-pointer hover:bg-gray-50 bg-blue-50 animate-pulse';
     }
     return 'cursor-pointer hover:bg-gray-50';
+  };
+
+  // Generate CSV template for download
+  const downloadTemplate = () => {
+    const headers = 'Company Name,Contact Name,Contact Email,Contact Phone,Industry,Company Size,Annual Revenue,Website\n';
+    const sampleRow = 'Acme Inc,John Doe,john@acmeinc.com,555-123-4567,Technology,100-500,10000000,https://acmeinc.com';
+    const csvContent = headers + sampleRow;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'lead_upload_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success("Template downloaded");
   };
 
   return (
@@ -298,14 +457,30 @@ export default function LeadQualificationWorkflow() {
                           className="hidden"
                           id="lead-upload"
                           onChange={handleFileUpload}
+                          disabled={isUploading}
                         />
                         <label htmlFor="lead-upload" className="cursor-pointer">
                           <FileSpreadsheet className="h-8 w-8 mx-auto mb-4" />
                           <p>Drop CSV or Excel file or click to browse</p>
                         </label>
                       </div>
-                      <Button onClick={() => document.getElementById('lead-upload')?.click()} className="w-full">
-                        Select File
+                      <Button 
+                        onClick={() => document.getElementById('lead-upload')?.click()} 
+                        className="w-full"
+                        disabled={isUploading}
+                      >
+                        {isUploading ? (
+                          <>
+                            <motion.div 
+                              className="h-4 w-4 mr-2 rounded-full border-2 border-white border-t-transparent"
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            />
+                            Uploading...
+                          </>
+                        ) : (
+                          'Select File'
+                        )}
                       </Button>
                     </div>
                   </DialogContent>
@@ -335,15 +510,24 @@ export default function LeadQualificationWorkflow() {
                 
                 <Button 
                   variant="outline" 
-                  onClick={() => toast.success("Template downloaded")}
+                  onClick={downloadTemplate}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Download
+                  Download Template
                 </Button>
                 
                 <Button variant="outline">
                   <Filter className="h-4 w-4 mr-2" />
                   Filter
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  onClick={fetchAllResearch}
+                  disabled={isLoadingResearch}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingResearch ? 'animate-spin' : ''}`} />
+                  Refresh Data
                 </Button>
               </div>
               
@@ -351,7 +535,7 @@ export default function LeadQualificationWorkflow() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Qualifying leads...</span>
-                    <span>{Math.min(progressValue, 100)}%</span>
+                    <span>{Math.min(progressValue, 100).toFixed(0)}%</span>
                   </div>
                   <Progress value={progressValue} className="h-2" />
                 </div>
@@ -390,6 +574,7 @@ export default function LeadQualificationWorkflow() {
                             checked={selectedLeads.includes(lead.id)}
                             onChange={() => toggleLeadSelection(lead.id)}
                             className="h-4 w-4"
+                            disabled={lead.status !== 'New'}
                           />
                         </TableCell>
                         <TableCell className="font-medium">
@@ -536,37 +721,45 @@ export default function LeadQualificationWorkflow() {
                     </div>
                   </div>
 
-                  <Separator />
+                  {selectedLead.research && (
+                    <>
+                      <Separator />
 
-                  <div className="pt-4">
-                    <h3 className="font-semibold mb-2">Additional Insights</h3>
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="text-sm font-medium">Company Size</h4>
-                        <p className="text-sm text-gray-600">Mid-size enterprise, 100-500 employees</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium">Industry</h4>
-                        <p className="text-sm text-gray-600">Technology / Software</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium">Key Technologies</h4>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          <Badge variant="secondary" className="text-xs">React</Badge>
-                          <Badge variant="secondary" className="text-xs">Node.js</Badge>
-                          <Badge variant="secondary" className="text-xs">AWS</Badge>
+                      <div className="pt-4">
+                        <h3 className="font-semibold mb-2">Company Research</h3>
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-sm font-medium">Company Size</h4>
+                            <p className="text-sm text-gray-600">{selectedLead.research.companySize}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium">Industry</h4>
+                            <p className="text-sm text-gray-600">{selectedLead.research.industry}</p>
+                          </div>
+                          {selectedLead.research.technologies && selectedLead.research.technologies.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium">Key Technologies</h4>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {selectedLead.research.technologies.map((tech, index) => (
+                                  <Badge key={index} variant="secondary" className="text-xs">{tech}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {selectedLead.research.interactions && selectedLead.research.interactions.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium">Previous Interactions</h4>
+                              <ul className="text-sm text-gray-600 list-disc pl-5 mt-1">
+                                {selectedLead.research.interactions.map((interaction, index) => (
+                                  <li key={index}>{interaction}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-medium">Previous Interactions</h4>
-                        <ul className="text-sm text-gray-600 list-disc pl-5 mt-1">
-                          <li>Downloaded whitepaper (2 weeks ago)</li>
-                          <li>Attended webinar (1 month ago)</li>
-                          <li>Visited pricing page 3 times</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
