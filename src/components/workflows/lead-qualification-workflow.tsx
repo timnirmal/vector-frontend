@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { motion } from "framer-motion";
 import { Upload, Download, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import ModalWithRadarChart from "@/components/ui/ModalWithRadarChart";
 
 // ---------------------------------------------
 // 1) Type definitions
@@ -314,98 +315,14 @@ export default function LeadQualificationWorkflow() {
 
         {/* =============== Modal for Showing Full Details =============== */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-3xl w-full h-[80vh] flex flex-col">
-            {/* Scrollable Content Area */}
-            <div className="overflow-y-auto flex-1 p-4">
-              {selectedProspect && (
-                  <>
-                    <DialogHeader>
-                      <DialogTitle>
-                        Full Details for {selectedProspect.first_name} {selectedProspect.last_name}
-                      </DialogTitle>
-                    </DialogHeader>
-
-                    {/* Scrollable Content */}
-                    <div className="space-y-4">
-                      {/* Basic Info */}
-                      <div>
-                        <h3 className="font-semibold mb-2">Basic Info</h3>
-                        <Separator />
-                        <p><strong>Company Name:</strong> {selectedProspect.company_name || "N/A"}</p>
-                        <p><strong>Work Email:</strong> {selectedProspect.work_email || "N/A"}</p>
-                        <p><strong>Direct Email:</strong> {selectedProspect.Direct_email || "N/A"}</p>
-                        <p><strong>Phone 1:</strong> {selectedProspect.phone_1 || "N/A"}</p>
-                        <p><strong>Phone 2:</strong> {selectedProspect.phone_2 || "N/A"}</p>
-                      </div>
-
-                      {/* Company Info */}
-                      <div>
-                        <h3 className="font-semibold mb-2">Company Info</h3>
-                        <Separator />
-                        <p><strong>Domain:</strong> {selectedProspect.company_domain || "N/A"}</p>
-                        <p><strong>Description:</strong> {selectedProspect.company_description || "N/A"}</p>
-                        <p><strong>Year Founded:</strong> {selectedProspect.company_year_founded || "N/A"}</p>
-                        <p>
-                          <strong>Website:</strong>{" "}
-                          {selectedProspect.company_website ? (
-                              <a href={selectedProspect.company_website} target="_blank" rel="noopener noreferrer" className="underline">
-                                {selectedProspect.company_website}
-                              </a>
-                          ) : (
-                              "N/A"
-                          )}
-                        </p>
-                      </div>
-
-                      {/* BANT Scores */}
-                      <div>
-                        <h3 className="font-semibold mb-2">BANT Analysis</h3>
-                        <Separator />
-                        <p><strong>Budget Score:</strong> {selectedProspect.budget_score ?? "N/A"}</p>
-                        <p><strong>Authority Score:</strong> {selectedProspect.authority_score ?? "N/A"}</p>
-                        <p><strong>Need Score:</strong> {selectedProspect.need_score ?? "N/A"}</p>
-                        <p><strong>Timeline Score:</strong> {selectedProspect.timeline_score ?? "N/A"}</p>
-                        <p>
-                          <strong>Final Analysis:</strong>{" "}
-                          {selectedProspect.final_analysis ? (
-                              <Badge
-                                  className={
-                                    selectedProspect.final_analysis.toLowerCase() === "qualified"
-                                        ? "bg-green-100 text-green-800"
-                                        : "bg-red-100 text-red-800"
-                                  }
-                              >
-                                {selectedProspect.final_analysis}
-                              </Badge>
-                          ) : (
-                              "N/A"
-                          )}
-                        </p>
-                      </div>
-
-                      {/* Research Data */}
-                      {selectedProspect.research_data && (
-                          <div>
-                            <h3 className="font-semibold mb-2">Research Data</h3>
-                            <Separator />
-                            <pre className="bg-gray-100 p-2 mt-2 rounded max-h-[200px] overflow-auto">
-                {selectedProspect.research_data}
-              </pre>
-                          </div>
-                      )}
-                    </div>
-                  </>
-              )}
-            </div>
-
-            {/* Close Button */}
-            <div className="p-4 border-t flex justify-end">
-              <Button onClick={() => setIsDialogOpen(false)}>Close</Button>
-            </div>
-          </DialogContent>
-
-
+          {selectedProspect && (
+              <ModalWithRadarChart
+                  selectedProspect={selectedProspect}
+                  setIsDialogOpen={setIsDialogOpen}
+              />
+          )}
         </Dialog>
+
       </div>
   );
 }
