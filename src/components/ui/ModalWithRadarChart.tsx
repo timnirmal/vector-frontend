@@ -16,33 +16,33 @@ ChartJS.register(RadialLinearScale, PointElement, LineElement, Tooltip, Legend);
 
 type ModalWithRadarChartProps = {
     selectedProspect: {
-        first_name?: string;
-        last_name?: string;
-        work_email?: string;
+        first_name?: string | null;
+        last_name?: string | null;
+        work_email?: string | null;
         Direct_email?: string | null;
         phone_1?: string | null;
         phone_2?: string | null;
-        job_Title?: string;
-        seniority?: string;
-        departments?: string;
-        country?: string;
-        continent?: string;
-        linkedin_Url?: string;
-        company_name?: string;
-        company_domain?: string;
-        company_description?: string;
-        company_year_founded?: string;
-        company_website?: string;
-        company_number_of_employees?: string;
-        company_revenue?: string;
-        company_linkedin_URL?: string;
+        job_Title?: string | null;
+        seniority?: string | null;
+        departments?: string | null;
+        country?: string | null;
+        continent?: string | null;
+        linkedin_Url?: string | null;
+        company_name?: string | null;
+        company_domain?: string | null;
+        company_description?: string | null;
+        company_year_founded?: string | null;
+        company_website?: string | null;
+        company_number_of_employees?: string | null;
+        company_revenue?: string | null;
+        company_linkedin_URL?: string | null;
         company_specialities?: string | null;
-        research_data?: string;
-        budget_score?: number;
-        authority_score?: number;
-        need_score?: number;
-        timeline_score?: number;
-        final_analysis?: string;
+        research_data?: string | null;
+        budget_score?: number | null;
+        authority_score?: number | null;
+        need_score?: number | null;
+        timeline_score?: number | null;
+        final_analysis?: string | null;
     } | null;
     setIsDialogOpen: (open: boolean) => void;
 };
@@ -79,20 +79,19 @@ const ModalWithRadarChart: React.FC<ModalWithRadarChartProps> = ({ selectedProsp
         maintainAspectRatio: false,
         scales: {
             r: {
-                // min: 0,
-                // max: 5, // Setting scale from 0 to 10
-                // ticks: {
-                //     stepSize: 1,
-                //     font: { size: 12 },
-                //     color: "#555",
-                // },
-                grid: { color: "rgba(0, 0, 0, 0.1)" },
+                grid: {
+                    color: "rgba(128, 128, 128, 0.5)",
+                },
             },
         },
         plugins: {
-            legend: { display: true, position: "top" },
+            legend: {
+                display: true,
+                position: "top" as const, // Explicitly set to a valid literal type
+            },
         },
     };
+
 
     return (
         <DialogContent className="max-w-4xl w-full h-[80vh] flex flex-col">
