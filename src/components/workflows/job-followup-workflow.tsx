@@ -470,9 +470,9 @@ export default function JobWizardWorkflow() {
                                 </>
                             ) : (
                                 <>
-                                    {currentStep === 0 && "Upload CV"}
-                                    {currentStep === 1 && "Analyze"}
-                                    {currentStep === 2 && "Start Chat"}
+                                    {currentStep === 0 && "Upload JD"}
+                                    {currentStep === 1 && "Upload CV"}
+                                    {currentStep === 2 && "Chat"}
                                     <ChevronRight className="h-4 w-4 ml-2"/>
                                 </>
                             )}
