@@ -34,6 +34,8 @@ const WORKFLOWS = [
   },
 ];
 
+import JobWizardWorkflow from "@/components/workflows/job-followup";
+
 export default function WorkflowsPage() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 

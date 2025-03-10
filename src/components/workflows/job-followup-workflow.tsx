@@ -21,32 +21,27 @@ import {
 } from "lucide-react";
 import {toast} from "sonner";
 
-interface Analysis {
-    compatibilityScore: number;
-    strengths: string[];
-    weaknesses: string[];
-    cultureFit: number;
-    workStyle: string[];
-}
+// Import step components
+import JDStep from "./job-followup/jd";
+import CVStep from "./job-followup/cv";
+import AnalysisStep from "./job-followup/analysis";
+import ChatStep from "./job-followup/chat";
 
-interface ChatMessage {
-    sender: "user" | "agent";
-    content: string;
-    timestamp: Date;
-}
+// Import interfaces from the job-followup components
+import { CompatibilityResponse, ChatMessage } from "./job-followup/index";
 
 export default function JobWizardWorkflow() {
     const router = useRouter();
 
     // Wizard state
-    const [currentStep, setCurrentStep] = useState(3);
+    const [currentStep, setCurrentStep] = useState(0);
     const steps = ["Job Description", "Upload CV", "Analysis", "Chat"];
 
     // Data states
     const [jdFile, setJdFile] = useState<File | null>(null);
     const [jobDescription, setJobDescription] = useState("");
     const [file, setFile] = useState<File | null>(null);
-    const [analysis, setAnalysis] = useState<Analysis | null>(null);
+
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
         {
             sender: "agent",
@@ -56,25 +51,38 @@ export default function JobWizardWorkflow() {
         },
     ]);
     const [newMessage, setNewMessage] = useState("");
+
+    const [analysis, setAnalysis] = useState<CompatibilityResponse | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     // Step navigation
     const nextStep = async () => {
-        // If we’re moving from Step 0 -> Step 1, upload JD if provided
-        if (currentStep === 0) {
-            await handleJDUpload();
-        }
-        // If we’re moving from Step 1 -> Step 2, upload CV if provided
-        if (currentStep === 1) {
-            await handleCVUpload();
-        }
-        // If we’re moving to Step 3 (Analysis step complete), call the analyze endpoint
-        // if (currentStep === 2 && !analysis) {
-        if (currentStep === 2 ) {
-            await handleAnalyze();
-        }
+        try {
+            // If we're moving from Step 0 -> Step 1, upload JD if provided
+            if (currentStep === 0) {
+                await handleJDUpload();
+            }
+            // If we're moving from Step 1 -> Step 2, upload CV if provided
+            else if (currentStep === 1) {
+                await handleCVUpload();
+            }
+            // If we're moving to Step 3 (Analysis step complete), call the analyze endpoint
+            else if (currentStep === 2 && !analysis) {
+                // Wait for analysis to complete before proceeding
+                const analysisResult = await handleAnalyzeProfile();
+                if (!analysisResult) {
+                    // If analysis failed or returned no data, don't proceed
+                    return;
+                }
+            }
 
-        setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+            // Only advance to the next step if all async operations completed successfully
+            setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+        } catch (error) {
+            // Handle the error here (e.g., keep the user on the same step)
+            console.error("Next step not executed due to an error:", error);
+            toast.error("Failed to proceed to next step. Please try again.");
+        }
     };
 
     const prevStep = () => {
@@ -118,7 +126,7 @@ export default function JobWizardWorkflow() {
         }
 
         try {
-            toast.promise(
+            await toast.promise(
                 fetch("https://api.know360.io/job_followup_agent/upload-jd", {
                     method: "POST",
                     body: formData,
@@ -130,17 +138,18 @@ export default function JobWizardWorkflow() {
                 }),
                 {
                     loading: "Uploading job description...",
-                    success: (data) => {
-                        return data?.message || "Job description uploaded successfully";
-                    },
+                    success: (data) =>
+                        data?.message || "Job description uploaded successfully",
                     error: "Failed to upload JD",
                 }
             );
         } catch (error) {
             console.error("Error uploading JD:", error);
             toast.error("Error uploading job description");
+            throw error; // Optionally rethrow to stop progression if needed
         }
     };
+
 
     // ----------------------------
     // 2) Upload CV (File or Text)
@@ -160,7 +169,7 @@ export default function JobWizardWorkflow() {
         formData.append("file", file);
 
         try {
-            toast.promise(
+            await toast.promise(
                 fetch("https://api.know360.io/job_followup_agent/upload-cv", {
                     method: "POST",
                     body: formData,
@@ -172,52 +181,50 @@ export default function JobWizardWorkflow() {
                 }),
                 {
                     loading: "Uploading CV...",
-                    success: (data) => {
-                        return data?.message || "CV uploaded successfully";
-                    },
+                    success: (data) => data?.message || "CV uploaded successfully",
                     error: "Failed to upload CV",
                 }
             );
         } catch (error) {
             console.error("Error uploading CV:", error);
             toast.error("Error uploading CV");
+            throw error; // Optionally rethrow to stop progression if needed
         }
     };
 
     // ----------------------------
     // 3) Analyze CV vs JD
     // ----------------------------
-    const handleAnalyze = async () => {
+    const handleAnalyzeProfile = async () => {
         setIsAnalyzing(true);
+        try {
+            const response = await fetch('https://api.know360.io/job_followup_agent/analyze-profile', {
+                method: 'POST',
+                // You can add headers if needed:
+                // headers: { 'Content-Type': 'application/json' },
+            });
 
-        toast.promise(
-            fetch("https://api.know360.io/job_followup_agent/analyze-profile", {
-                method: "POST",
-            })
-                .then(async (res) => {
-                    if (!res.ok) {
-                        throw new Error("Failed to analyze CV");
-                    }
-                    return res.json();
-                })
-                .then((data) => {
-                    // The API should return something shaped like your Analysis interface
-                    // e.g. { compatibilityScore, strengths, weaknesses, cultureFit, workStyle }
-                    setAnalysis(data);
-                    setIsAnalyzing(false);
-                }),
-            {
-                loading: "Analyzing CV...",
-                success: "Analysis completed",
-                error: "Failed to analyze CV",
+            if (!response.ok) {
+                throw new Error('Analysis failed');
             }
-        );
+
+            const data: CompatibilityResponse = await response.json();
+            setAnalysis(data);
+            toast.success('Profile analyzed successfully');
+            return data; // Return the data so we can confirm it's processed
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to analyze profile');
+            throw error; // Rethrow to prevent next step if analysis fails
+        } finally {
+            setIsAnalyzing(false);
+        }
     };
 
     // ----------------------------
     // 4) Chat
     // ----------------------------
-    const sendMessage = () => {
+    const sendMessage = async () => {
         if (!newMessage.trim()) return;
 
         // Add user message
@@ -229,8 +236,25 @@ export default function JobWizardWorkflow() {
         setChatMessages((prev) => [...prev, userMessage]);
         setNewMessage("");
 
-        // Simulate agent response
-        setTimeout(() => {
+        try {
+            // In a real implementation, you would make an API call here
+            // For example:
+            // const response = await fetch('https://api.know360.io/job_followup_agent/chat', {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify({ message: newMessage }),
+            // });
+            // 
+            // if (!response.ok) {
+            //     throw new Error('Failed to get response');
+            // }
+            // 
+            // const data = await response.json();
+            // const responseMessage = data.message;
+            
+            // For now, simulate agent response with a delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
             const agentResponses = [
                 "Based on your CV, I'd recommend highlighting your React experience more prominently...",
                 "I noticed the job requires experience with TypeScript, which isn’t mentioned in your CV...",
@@ -246,7 +270,10 @@ export default function JobWizardWorkflow() {
                 timestamp: new Date(),
             };
             setChatMessages((prev) => [...prev, agentMessage]);
-        }, 1000);
+        } catch (error) {
+            console.error('Error sending message:', error);
+            toast.error('Failed to get response');
+        }
     };
 
     // ----------------------------
@@ -343,307 +370,43 @@ export default function JobWizardWorkflow() {
                 {/* Card for step content */}
                 <Card className="mb-6">
                     <CardContent className="p-6">
-                        {/* Step 0: Job Description */}
+                        {/* Render the appropriate step component based on currentStep */}
                         {currentStep === 0 && (
-                            <div className="space-y-6">
-                                <h2 className="text-2xl font-bold mb-4 flex items-center">
-                                    <FileText className="h-6 w-6 mr-2 text-[#121a28]"/>
-                                    Job Description
-                                </h2>
-
-                                {/* Upload JD file */}
-                                <div
-                                    className="border-2 border-dashed rounded-lg p-8 text-center mb-4 bg-[#DEE6E5] transition-colors">
-                                    <input
-                                        type="file"
-                                        accept=".pdf,.doc,.docx,.txt"
-                                        className="hidden"
-                                        id="jd-upload"
-                                        onChange={handleJDFileSelect}
-                                    />
-                                    <label htmlFor="jd-upload" className="cursor-pointer">
-                                        <FileText className="h-8 w-8 mx-auto mb-4 text-[#121a28]"/>
-                                        <p className="font-medium text-[#121a28]">
-                                            Upload Job Description
-                                        </p>
-                                        <p className="text-sm text-[#121a28] mt-1">
-                                            (PDF, DOC, DOCX, TXT)
-                                        </p>
-                                    </label>
-                                </div>
-
-                                {jdFile && (
-                                    <div className="flex items-center p-2 bg-blue-50 rounded-md">
-                                        <FileText className="h-5 w-5 mr-2 text-[#121a28]"/>
-                                        <p className="text-sm text-gray-700">{jdFile.name}</p>
-                                    </div>
-                                )}
-
-                                {/* Or paste JD text */}
-                                <div className="mt-6">
-                                    <p className="text-sm font-medium flex items-center mb-3">
-                                        <ChevronRight className="h-4 w-4 mr-1 text-[#121a28]"/>
-                                        Or paste the job description below:
-                                    </p>
-                                    <Textarea
-                                        placeholder="Enter the job description here..."
-                                        value={jobDescription}
-                                        onChange={(e) => setJobDescription(e.target.value)}
-                                        className="min-h-[200px]"
-                                    />
-                                </div>
-                            </div>
+                            <JDStep 
+                                jobDescription={jobDescription}
+                                setJobDescription={setJobDescription}
+                                jdFile={jdFile}
+                                setJdFile={setJdFile}
+                                handleJDFileSelect={handleJDFileSelect}
+                                handleJDUpload={handleJDUpload}
+                            />
                         )}
 
                         {/* Step 1: CV Upload */}
                         {currentStep === 1 && (
-                            <div className="space-y-6">
-                                <h2 className="text-2xl font-bold mb-4 flex items-center">
-                                    <Upload className="h-6 w-6 mr-2 text-green-600"/>
-                                    Upload Your CV
-                                </h2>
-                                <div
-                                    className="border-2 border-dashed rounded-lg p-8 text-center bg-green-50 hover:bg-green-100 transition-colors">
-                                    <input
-                                        type="file"
-                                        accept=".pdf,.doc,.docx"
-                                        className="hidden"
-                                        id="cv-upload"
-                                        onChange={handleCVFileSelect}
-                                    />
-                                    <label htmlFor="cv-upload" className="cursor-pointer">
-                                        <Upload className="h-8 w-8 mx-auto mb-4 text-green-600"/>
-                                        <p className="font-medium text-green-700">
-                                            Drop your resume here or click to browse
-                                        </p>
-                                        <p className="text-sm text-green-600 mt-1">
-                                            (PDF, DOC, DOCX)
-                                        </p>
-                                    </label>
-                                </div>
-                                {file && (
-                                    <div className="flex items-center p-2 bg-green-50 rounded-md">
-                                        <FileText className="h-5 w-5 mr-2 text-green-600"/>
-                                        <p className="text-sm text-gray-700">{file.name}</p>
-                                    </div>
-                                )}
-                            </div>
+                            <CVStep 
+                                file={file}
+                                setFile={setFile}
+                                handleCVFileSelect={handleCVFileSelect}
+                            />
                         )}
 
                         {/* Step 2: Analysis Results */}
                         {currentStep === 2 && (
-                            <div className="space-y-6">
-                                <h2 className="text-2xl font-bold mb-4 flex items-center">
-                                    <FileText className="h-6 w-6 mr-2 text-purple-600"/>
-                                    Analysis Results
-                                </h2>
-
-                                {isAnalyzing ? (
-                                    <div className="text-center py-12">
-                                        <div className="flex justify-center mb-6">
-                                            <FileText className="h-12 w-12 text-purple-400 animate-pulse"/>
-                                        </div>
-                                        <p className="mb-4 text-lg font-medium">
-                                            Analyzing your CV against the job description...
-                                        </p>
-                                        <Progress value={undefined} className="h-2 animate-pulse"/>
-                                    </div>
-                                ) : analysis ? (
-                                    <div className="space-y-6">
-                                        <div className="bg-purple-50 p-4 rounded-lg">
-                                            <p className="text-sm font-medium mb-2 flex items-center">
-                                                <Calendar className="h-4 w-4 mr-2 text-purple-600"/>
-                                                Compatibility Score
-                                            </p>
-                                            <Progress
-                                                value={analysis.compatibilityScore}
-                                                className="h-3 bg-purple-100"
-                                            />
-                                            <p className="text-sm mt-2 font-bold text-purple-700">
-                                                {analysis.compatibilityScore}% match
-                                            </p>
-                                        </div>
-
-                                        <Separator/>
-
-                                        <div>
-                                            <p className="font-medium mb-2 flex items-center">
-                                                <ChevronRight className="h-5 w-5 mr-1 text-green-600"/>
-                                                Strengths
-                                            </p>
-                                            <div className="bg-green-50 p-4 rounded-lg">
-                                                <ul className="space-y-2">
-                                                    {analysis.strengths.map((strength, index) => (
-                                                        <li
-                                                            key={index}
-                                                            className="text-green-700 flex items-start"
-                                                        >
-                              <span
-                                  className="inline-block h-5 w-5 rounded-full bg-green-200 flex-shrink-0 mr-2 items-center justify-center mt-0.5">
-                                <ChevronRight className="h-3 w-3 text-green-700"/>
-                              </span>
-                                                            {strength}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <p className="font-medium mb-2 flex items-center">
-                                                <ChevronRight className="h-5 w-5 mr-1 text-orange-600"/>
-                                                Areas for Improvement
-                                            </p>
-                                            <div className="bg-orange-50 p-4 rounded-lg">
-                                                <ul className="space-y-2">
-                                                    {analysis.weaknesses.map((weakness, index) => (
-                                                        <li
-                                                            key={index}
-                                                            className="text-orange-700 flex items-start"
-                                                        >
-                              <span
-                                  className="inline-block h-5 w-5 rounded-full bg-orange-200 flex-shrink-0 mr-2 items-center justify-center mt-0.5">
-                                <ChevronRight className="h-3 w-3 text-orange-700"/>
-                              </span>
-                                                            {weakness}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        </div>
-
-                                        <Separator/>
-
-                                        <div>
-                                            <p className="font-medium mb-2 flex items-center">
-                                                <ChevronRight className="h-5 w-5 mr-1 text-[#121a28]"/>
-                                                Work Style Indicators
-                                            </p>
-                                            <div className="bg-blue-50 p-4 rounded-lg">
-                                                <div className="flex flex-wrap gap-2">
-                                                    {analysis.workStyle.map((style, index) => (
-                                                        <span
-                                                            key={index}
-                                                            className="px-3 py-1 bg-blue-100 text-[#121a28] rounded-full text-sm flex items-center"
-                                                        >
-                              <span className="h-2 w-2 bg-blue-500 rounded-full mr-2"></span>
-                                                            {style}
-                            </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <Separator/>
-
-                                        <div className="text-center bg-gray-50 p-6 rounded-lg">
-                                            <MessageSquare className="h-12 w-12 mx-auto mb-4 text-indigo-500"/>
-                                            <p className="text-lg font-medium mb-2">
-                                                Ready to get personalized advice?
-                                            </p>
-                                            <p className="text-sm text-gray-600 mb-4">
-                                                Chat with our AI assistant about your application and
-                                                get tips on how to improve your chances.
-                                            </p>
-                                            <Button
-                                                onClick={nextStep}
-                                                className="mt-2 bg-indigo-600 hover:bg-indigo-700"
-                                            >
-                                                Start Chat
-                                                <MessageSquare className="ml-2 h-4 w-4"/>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-8">
-                                        <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400"/>
-                                        <p>
-                                            No analysis available. Please go back and complete the
-                                            previous steps.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                            <AnalysisStep 
+                                analysis={analysis}
+                                isAnalyzing={isAnalyzing}
+                                handleAnalyzeProfile={handleAnalyzeProfile}
+                            />
                         )}
 
                         {/* Step 3: Chat */}
                         {currentStep === 3 && (
-                            <div className="space-y-6">
-                                <h2 className="text-2xl font-bold mb-4 flex items-center">
-                                    <MessageSquare className="h-6 w-6 mr-2 text-indigo-600"/>
-                                    Chat with Job Assistant
-                                </h2>
-
-                                <div className="bg-gradient-to-b from-indigo-50 to-white p-4 rounded-lg">
-                                    <ScrollArea className="h-[400px] rounded-md bg-white border shadow-sm p-4 mb-4">
-                                        {chatMessages.map((message, index) => (
-                                            <div
-                                                key={index}
-                                                className={`mb-4 ${
-                                                    message.sender === "user" ? "text-right" : "text-left"
-                                                }`}
-                                            >
-                                                <div className="flex items-center mb-1">
-                                                    {message.sender === "agent" && (
-                                                        <>
-                                                            <div
-                                                                className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2">
-                                                                <MessageSquare className="h-4 w-4 text-indigo-600"/>
-                                                            </div>
-                                                            <span className="text-xs font-medium text-indigo-600">
-                                Job Assistant
-                              </span>
-                                                        </>
-                                                    )}
-                                                    {message.sender === "user" && (
-                                                        <>
-                              <span className="text-xs font-medium text-[#121a28] ml-auto mr-2">
-                                You
-                              </span>
-                                                            <div
-                                                                className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                                                <Upload className="h-4 w-4 text-[#121a28]"/>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                                <div
-                                                    className={`inline-block max-w-[80%] rounded-lg p-3 shadow-sm ${
-                                                        message.sender === "user"
-                                                            ? "bg-blue-100 text-blue-900"
-                                                            : "bg-indigo-100 text-indigo-900"
-                                                    }`}
-                                                >
-                                                    <p>{message.content}</p>
-                                                    <p className="text-xs mt-1 opacity-70">
-                                                        {message.timestamp.toLocaleTimeString([], {
-                                                            hour: "2-digit",
-                                                            minute: "2-digit",
-                                                        })}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </ScrollArea>
-
-                                    <div className="flex gap-2 bg-white p-2 rounded-lg shadow-sm">
-                                        <Input
-                                            value={newMessage}
-                                            onChange={(e) => setNewMessage(e.target.value)}
-                                            placeholder="Type your message..."
-                                            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                                            className="border-indigo-200 focus:border-indigo-400"
-                                        />
-                                        <Button
-                                            onClick={sendMessage}
-                                            className="bg-indigo-600 hover:bg-indigo-700"
-                                        >
-                                            <MessageSquare className="h-4 w-4 mr-2"/>
-                                            Send
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
+                            <ChatStep 
+                                chatMessages={chatMessages}
+                                setChatMessages={setChatMessages}
+                                analysis={analysis}
+                            />
                         )}
                     </CardContent>
                 </Card>
