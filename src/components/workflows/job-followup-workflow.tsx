@@ -55,9 +55,18 @@ export default function JobWizardWorkflow() {
     const [analysis, setAnalysis] = useState<CompatibilityResponse | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+    // Add loading state for step transitions
+    const [isLoading, setIsLoading] = useState(false);
+
     // Step navigation
     const nextStep = async () => {
+        console.log("nextStep");
         try {
+            // Set loading state to prevent multiple clicks
+            setIsLoading(true);
+            console.log("loading", isLoading);
+            console.log("current step", currentStep);
+
             // If we're moving from Step 0 -> Step 1, upload JD if provided
             if (currentStep === 0) {
                 await handleJDUpload();
@@ -72,6 +81,7 @@ export default function JobWizardWorkflow() {
                 const analysisResult = await handleAnalyzeProfile();
                 if (!analysisResult) {
                     // If analysis failed or returned no data, don't proceed
+                    setIsLoading(false);
                     return;
                 }
             }
@@ -82,6 +92,9 @@ export default function JobWizardWorkflow() {
             // Handle the error here (e.g., keep the user on the same step)
             console.error("Next step not executed due to an error:", error);
             toast.error("Failed to proceed to next step. Please try again.");
+        } finally {
+            // Always reset loading state when done
+            setIsLoading(false);
         }
     };
 
@@ -114,6 +127,7 @@ export default function JobWizardWorkflow() {
     };
 
     const handleJDUpload = async () => {
+        console.log("JD upload")
         // If neither a file nor text is provided, skip
         if (!jdFile && !jobDescription.trim()) return;
 
@@ -126,23 +140,22 @@ export default function JobWizardWorkflow() {
         }
 
         try {
-            await toast.promise(
-                fetch("https://api.know360.io/job_followup_agent/upload-jd", {
-                    method: "POST",
-                    body: formData,
-                }).then(async (res) => {
-                    if (!res.ok) {
-                        throw new Error("Failed to upload JD");
-                    }
-                    return res.json();
-                }),
-                {
-                    loading: "Uploading job description...",
-                    success: (data) =>
-                        data?.message || "Job description uploaded successfully",
-                    error: "Failed to upload JD",
-                }
-            );
+            // Create a variable to hold the fetch promise so we can properly await it
+            const response = await fetch("https://api.know360.io/job_followup_agent/upload-jd", {
+                method: "POST",
+                body: formData,
+            });
+            
+            if (!response.ok) {
+                throw new Error("Failed to upload JD");
+            }
+            
+            const result = await response.json();
+            toast.success(result?.message || "Job description uploaded successfully");
+            
+            // This will only execute after the fetch is complete
+            console.log("JD uploaded", result);
+            return result;
         } catch (error) {
             console.error("Error uploading JD:", error);
             toast.error("Error uploading job description");
@@ -169,22 +182,22 @@ export default function JobWizardWorkflow() {
         formData.append("file", file);
 
         try {
-            await toast.promise(
-                fetch("https://api.know360.io/job_followup_agent/upload-cv", {
-                    method: "POST",
-                    body: formData,
-                }).then(async (res) => {
-                    if (!res.ok) {
-                        throw new Error("Failed to upload CV");
-                    }
-                    return res.json();
-                }),
-                {
-                    loading: "Uploading CV...",
-                    success: (data) => data?.message || "CV uploaded successfully",
-                    error: "Failed to upload CV",
-                }
-            );
+            // Create a variable to hold the fetch promise so we can properly await it
+            const response = await fetch("https://api.know360.io/job_followup_agent/upload-cv", {
+                method: "POST",
+                body: formData,
+            });
+            
+            if (!response.ok) {
+                throw new Error("Failed to upload CV");
+            }
+            
+            const result = await response.json();
+            toast.success(result?.message || "CV uploaded successfully");
+            
+            // Log completion with result
+            console.log("CV uploaded", result);
+            return result;
         } catch (error) {
             console.error("Error uploading CV:", error);
             toast.error("Error uploading CV");
@@ -198,19 +211,36 @@ export default function JobWizardWorkflow() {
     const handleAnalyzeProfile = async () => {
         setIsAnalyzing(true);
         try {
+            console.log("Starting profile analysis...");
+            
+            // Create a fetch promise that we can await and track
             const response = await fetch('https://api.know360.io/job_followup_agent/analyze-profile', {
                 method: 'POST',
                 // You can add headers if needed:
                 // headers: { 'Content-Type': 'application/json' },
             });
-
+            
             if (!response.ok) {
-                throw new Error('Analysis failed');
+                throw new Error('Analysis failed with status: ' + response.status);
             }
-
-            const data: CompatibilityResponse = await response.json();
+            
+            const responseData = await response.json();
+            toast.success("Profile analyzed successfully");
+            
+            console.log("Analysis complete", responseData);
+            
+            // Ensure the response data matches the CompatibilityResponse interface
+            // If the API returns a nested structure, extract the relevant data
+            const data: CompatibilityResponse = responseData.result || responseData;
+            
+            // Validate that the data conforms to the expected interface
+            if (!data.compatibility_score && typeof data.compatibility_score !== 'number') {
+                console.warn("API response missing compatibility_score", data);
+                // Provide default values if needed
+                data.compatibility_score = data.compatibility_score || 0;
+            }
+            
             setAnalysis(data);
-            toast.success('Profile analyzed successfully');
             return data; // Return the data so we can confirm it's processed
         } catch (error) {
             console.error(error);
@@ -426,17 +456,26 @@ export default function JobWizardWorkflow() {
                     {currentStep < steps.length - 1 ? (
                         <Button
                             onClick={nextStep}
-                            disabled={!isStepComplete()}
+                            disabled={!isStepComplete() || isLoading}
                             className={`${
-                                isStepComplete()
+                                isStepComplete() && !isLoading
                                     ? "bg-blue-600 hover:bg-blue-700"
                                     : "bg-gray-400"
                             }`}
                         >
-                            {currentStep === 0 && "Upload CV"}
-                            {currentStep === 1 && "Analyze"}
-                            {currentStep === 2 && "Start Chat"}
-                            <ChevronRight className="h-4 w-4 ml-2"/>
+                            {isLoading ? (
+                                <>
+                                    <span className="mr-2">Loading...</span>
+                                    <span className="animate-spin">⟳</span>
+                                </>
+                            ) : (
+                                <>
+                                    {currentStep === 0 && "Upload CV"}
+                                    {currentStep === 1 && "Analyze"}
+                                    {currentStep === 2 && "Start Chat"}
+                                    <ChevronRight className="h-4 w-4 ml-2"/>
+                                </>
+                            )}
                         </Button>
                     ) : (
                         <Button
