@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
-import { ChatMessage, CompatibilityResponse } from "./index";
+import { ChatMessage, CompatibilityResponse } from "./types";
 
 interface ChatStepProps {
     chatMessages: ChatMessage[];

@@ -7,19 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { CheckCircle, AlertTriangle, Target, Brain, MessageSquare } from "lucide-react";
 
-interface InterviewAnalysisResponse {
-    overall_score: number;
-    key_strengths: string[];
-    areas_of_improvement: string[];
-    response_quality: {
-        clarity: number;
-        completeness: number;
-        relevance: number;
-    };
-    themes_identified: string[];
-    recommendations_for_hiring_manager: string[];
-    final_recommendation: string;
-}
+import { InterviewAnalysisResponse } from './types';
 
 interface InterviewAnalysisProps {
     analysis: InterviewAnalysisResponse | null;

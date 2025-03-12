@@ -6,7 +6,9 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { CheckCircle } from "lucide-react";
-import { CompatibilityResponse } from "./index";
+
+
+import { CompatibilityResponse } from './types';
 
 interface AnalysisStepProps {
     analysis: CompatibilityResponse | null;
