@@ -26,16 +26,45 @@ import JDStep from "./job-followup/jd";
 import CVStep from "./job-followup/cv";
 import AnalysisStep from "./job-followup/analysis";
 import ChatStep from "./job-followup/chat";
+import InterviewAnalysis from "./job-followup/interview-analysis";
 
 // Import interfaces from the job-followup components
-import { CompatibilityResponse, ChatMessage } from "./job-followup/index";
+interface CompatibilityResponse {
+    compatibility_score: number;
+    strengths: string[];
+    potential_concerns: string[];
+    work_style_indicators: string[];
+    culture_fit_aspects: string[];
+    adaptability_signals: string[];
+    next_steps: string;
+}
+
+interface ChatMessage {
+    sender: "user" | "agent";
+    content: string;
+    timestamp: Date;
+}
+
+interface InterviewAnalysisResponse {
+    overall_score: number;
+    key_strengths: string[];
+    areas_of_improvement: string[];
+    response_quality: {
+        clarity: number;
+        completeness: number;
+        relevance: number;
+    };
+    themes_identified: string[];
+    recommendations_for_hiring_manager: string[];
+    final_recommendation: string;
+}
 
 export default function JobWizardWorkflow() {
     const router = useRouter();
 
     // Wizard state
     const [currentStep, setCurrentStep] = useState(0);
-    const steps = ["Job Description", "Upload CV", "Analysis", "Chat"];
+    const steps = ["Job Description", "Upload CV", "Analysis", "Chat", "Interview Analysis"];
 
     // Data states
     const [jdFile, setJdFile] = useState<File | null>(null);
@@ -54,6 +83,39 @@ export default function JobWizardWorkflow() {
 
     const [analysis, setAnalysis] = useState<CompatibilityResponse | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [interviewAnalysis, setInterviewAnalysis] = useState<InterviewAnalysisResponse | null>(null);
+    const [isAnalyzingInterview, setIsAnalyzingInterview] = useState(false);
+
+    // Function to analyze interview
+    const handleAnalyzeInterview = async () => {
+        setIsAnalyzingInterview(true);
+        try {
+            // Create a FormData object instead of using JSON
+            const formData = new FormData();
+            formData.append("candidate_id", "1");
+            
+            const response = await fetch('https://api.know360.io/job_followup_agent/analyze-interview-responses', {
+                method: 'POST',
+                // Remove Content-Type header to let browser set it automatically with boundary
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Interview analysis failed');
+            }
+
+            const data = await response.json();
+            setInterviewAnalysis(data);
+            toast.success("Interview analyzed successfully");
+            return data;
+        } catch (error) {
+            console.error('Error analyzing interview:', error);
+            toast.error('Failed to analyze interview');
+            throw error;
+        } finally {
+            setIsAnalyzingInterview(false);
+        }
+    }
 
     // Add loading state for step transitions
     const [isLoading, setIsLoading] = useState(false);
@@ -84,6 +146,13 @@ export default function JobWizardWorkflow() {
                     setIsLoading(false);
                     return;
                 }
+            } else if (currentStep === 3 && chatMessages.length > 1) {
+                // When moving from Chat to Interview Analysis, analyze the chat
+                const interviewResult = await handleAnalyzeInterview();
+                if (!interviewResult) {
+                    setIsLoading(false);
+                    return;
+                }
             }
 
             // Only advance to the next step if all async operations completed successfully
@@ -111,6 +180,10 @@ export default function JobWizardWorkflow() {
                 return !!file;
             case 2: // Analysis
                 return !!analysis;
+            case 3: // Chat
+                return true;
+            case 4: // Interview Analysis
+                return !!interviewAnalysis;
             default:
                 return true;
         }
@@ -356,6 +429,7 @@ export default function JobWizardWorkflow() {
                                                 {index === 1 && <Upload className="h-6 w-6"/>}
                                                 {index === 2 && <FileText className="h-6 w-6"/>}
                                                 {index === 3 && <MessageSquare className="h-6 w-6"/>}
+                                                {index === 4 && <CheckCircle className="h-6 w-6"/>}
                                             </>
                                         )}
                                     </div>
@@ -438,6 +512,12 @@ export default function JobWizardWorkflow() {
                                 analysis={analysis}
                             />
                         )}
+                        {currentStep === 4 && (
+                            <InterviewAnalysis
+                                analysis={interviewAnalysis}
+                                isLoading={isAnalyzingInterview}
+                            />
+                        )}
                     </CardContent>
                 </Card>
 
@@ -472,7 +552,8 @@ export default function JobWizardWorkflow() {
                                 <>
                                     {currentStep === 0 && "Upload JD"}
                                     {currentStep === 1 && "Upload CV"}
-                                    {currentStep === 2 && "Chat"}
+                                    {currentStep === 2 && "Start Analysis"}
+                                    {currentStep === 3 && "Start Interview Analysis"}
                                     <ChevronRight className="h-4 w-4 ml-2"/>
                                 </>
                             )}
