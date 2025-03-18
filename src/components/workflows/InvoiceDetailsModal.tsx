@@ -204,11 +204,6 @@ export default function InvoiceDetailsModal({ invoice, isOpen, onClose }: Invoic
                 <div className="flex justify-end pt-4 border-t">
                     <Button onClick={onClose}>Close</Button>
                 </div>
-                    
-
-                <div className="flex justify-end pt-4 border-t">
-                    <Button onClick={onClose}>Close</Button>
-                </div>
             </DialogContent>
         </Dialog>
     );
