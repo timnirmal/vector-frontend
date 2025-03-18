@@ -40,7 +40,6 @@ import InvoiceDetailsModal from './InvoiceDetailsModal';
 
 interface InvoiceData {
   id: string;
-  category: string;
   description: string;
   vendor: string;
   amount: string;
@@ -58,6 +57,7 @@ interface InvoiceData {
     quantity: number;
     unit_price: number;
     amount: number;
+    debit_account: string;
   }>;
 }
 
@@ -84,7 +84,6 @@ export default function InvoiceWorkflow() {
         // Create an entry in processedData for each file immediately
         const newInvoice: InvoiceData = {
           id: `pending-${Date.now()}-${Math.random()}`,
-          category: 'Pending',
           description: 'Processing...',
           vendor: 'Pending',
           amount: 'Pending',
@@ -210,19 +209,29 @@ export default function InvoiceWorkflow() {
                         quantity: parseFloat(entry.Quantity) || 1,
                         unit_price: parseFloat(entry.Unit_Price) || 0,
                         amount: parseFloat(entry.Total_Price) || 0,
+                        debit_account: entry['Debit Account'] || 'N/A',
                       }));
                       return {
                         ...item,
-                        category: firstEntry.Debit_Account || 'Not Extracted',
                         description: descriptions,
                         vendor: firstEntry['Vendor Account'] || 'Not Extracted',
                         amount: firstEntry.Total ? `$${firstEntry.Total}` : '-',
                         status: 'processed',
                         date: firstEntry['Invoice Date'] || item.date,
-                        // Optionally include additional details
+                        // Include all additional details from API response
                         invoice_number: firstEntry['Invoice Number'] || 'N/A',
                         due_date: firstEntry['Due Date'] || 'N/A',
                         po_number: firstEntry['PO Number'] || 'N/A',
+                        vendor_address: firstEntry['Vendor Address'] || 'N/A',
+                        vendor_phone: firstEntry['Vendor Phone'] || 'N/A',
+                        vat_number: firstEntry['VAT Number'] || 'N/A',
+                        currency: firstEntry['Currency'] || 'GBP',
+                        subtotal: firstEntry['Subtotal'] || 'N/A',
+                        discount: firstEntry['Discount'] || 'N/A',
+                        total: firstEntry['Total'] || 'N/A',
+                        amount_paid: firstEntry['Amount Paid'] || 'N/A',
+                        amount_due: firstEntry['Amount Due'] || 'N/A',
+                        payment_details: firstEntry['Payment Details'] || 'N/A',
                         line_items: line_items,
                       };
                     }
@@ -508,7 +517,7 @@ export default function InvoiceWorkflow() {
                       <TableRow>
                         <TableHead>File Name</TableHead>
                         <TableHead>Vendor</TableHead>
-                        <TableHead>Category</TableHead>
+                        {/* <TableHead>Category</TableHead> */}
                         <TableHead>Amount</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Date</TableHead>
@@ -520,7 +529,7 @@ export default function InvoiceWorkflow() {
                         <TableRow key={invoice.id}>
                           <TableCell>{invoice.fileName}</TableCell>
                           <TableCell>{invoice.vendor}</TableCell>
-                          <TableCell>{invoice.category}</TableCell>
+                          {/* <TableCell>{invoice.category}</TableCell> */}
                           <TableCell>{invoice.amount}</TableCell>
                           <TableCell>
                             <Badge
